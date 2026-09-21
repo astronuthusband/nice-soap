@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nice Soap: handmade soap</title>
+<meta name="description" content="Small-batch, cold-process soap made with plant oils and real botanicals. Shop Nice Soap and get free delivery over RM 80.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Young+Serif&display=swap" rel="stylesheet">
+<script>
+/* Enables scroll-reveal styles only when they can actually be resolved. Falls back to fully visible content. */
+(function(){
+  var d = document.documentElement;
+  if('IntersectionObserver' in window && !window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    d.classList.add('js-reveal');
+    setTimeout(function(){ if(!window.__revealReady) d.classList.remove('js-reveal'); }, 2500);
+  }
+})();
+</script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="#top">Nice Soap</a>
+  <nav aria-label="Main">
+    <a href="#shop">Shop</a>
+    <a href="#story">Our soap</a>
+    <a href="#reviews">Reviews</a>
+  </nav>
+  <button class="cart-btn" id="cartBtn" type="button" aria-label="Open cart, 0 items">
+    Cart <span class="count" id="count" aria-hidden="true">0</span>
+  </button>
+</header>
+
+<main id="top">
+  <div class="wrap">
+    <section class="hero" style="padding-bottom:clamp(2.5rem,6vw,5rem)">
+      <div class="hero-copy reveal" data-reveal>
+        <h1>Soap that's simply nice.</h1>
+        <p class="lede">Cold-process bars made in small batches with plant oils and real botanicals. Gentle on skin, easy on the planet, and wrapped in paper.</p>
+        <div class="cta-row">
+          <a class="btn primary" href="#shop">Shop soap</a>
+          <a class="btn" href="#story">How we make it</a>
+        </div>
+        <p class="fine">Free delivery within Malaysia on orders over RM 80.</p>
+      </div>
+      <div class="hero-art reveal" data-reveal>
+        <div class="stage">
+          <button class="hero-bar" id="heroBar" type="button" aria-label="Lather the soap bar"></button>
+          <div id="bubbles" aria-hidden="true"></div>
+        </div>
+        <p class="fine">Tap the bar to lather up.</p>
+      </div>
+    </section>
+  </div>
+
+  <section id="best" aria-labelledby="bestTitle" style="padding-top:0;padding-bottom:0">
+    <div class="wrap">
+      <div class="section-head reveal" data-reveal>
+        <div>
+          <h2 id="bestTitle">Best sellers</h2>
+          <p>The bars our customers reorder most.</p>
+        </div>
+        <div class="arrows">
+          <button class="icon-btn arrow" type="button" id="bestPrev" aria-label="Previous best sellers" aria-controls="bestTrack" aria-disabled="true">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg>
+          </button>
+          <button class="icon-btn arrow" type="button" id="bestNext" aria-label="Next best sellers" aria-controls="bestTrack">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="carousel-track" id="bestTrack" data-reveal-group role="region" aria-label="Best sellers. Scroll horizontally to see more." tabindex="0"></div>
+    </div>
+  </section>
+
+  <section id="shop">
+    <div class="wrap">
+      <div class="section-head reveal" data-reveal>
+        <div>
+          <h2>Shop soap</h2>
+          <p>Every bar is 100 g. Buy a set of three and save 10%.</p>
+        </div>
+      </div>
+    </div>
+    <div id="shopSentinel" aria-hidden="true"></div>
+    <div class="shop-nav" id="shopNav">
+      <div class="wrap">
+        <div class="chips" id="chips" role="group" aria-label="Filter by scent family"></div>
+      </div>
+    </div>
+    <div class="wrap grid-wrap">
+      <div class="grid" id="grid"></div>
+    </div>
+  </section>
+
+  <section class="story" id="story">
+    <div class="wrap story-grid">
+      <h2 class="reveal" data-reveal>Made slowly, on purpose.</h2>
+      <div class="story-list">
+        <div class="story-item reveal" data-reveal>
+          <h3>Plant oils, no fillers</h3>
+          <p>Every bar starts with coconut, olive and shea. We skip synthetic foaming agents and use only clays and botanicals for color.</p>
+        </div>
+        <div class="story-item reveal" data-reveal>
+          <h3>Cured for six weeks</h3>
+          <p>Each batch rests for six weeks after it's poured. The bars come out hard and mild, and they last longer in a humid bathroom.</p>
+        </div>
+        <div class="story-item reveal" data-reveal>
+          <h3>Wrapped in paper</h3>
+          <p>Recycled paper wrap on every bar, and no plastic film anywhere. Your order arrives in a card box you can recycle.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="reviews">
+    <div class="wrap">
+      <div class="section-head reveal" data-reveal><h2>What people say</h2></div>
+      <div class="reviews">
+        <figure class="reveal" data-reveal>
+          <div class="stars" role="img" aria-label="5 out of 5 stars">★★★★★</div>
+          <blockquote>I switched the whole family to the Pandan bar. My skin doesn't feel tight after showering anymore.</blockquote>
+          <figcaption>Aina, Shah Alam</figcaption>
+        </figure>
+        <figure class="reveal" data-reveal>
+          <div class="stars" role="img" aria-label="5 out of 5 stars">★★★★★</div>
+          <blockquote>It came in paper only, no plastic anywhere. And Serai Bright wakes me up better than coffee.</blockquote>
+          <figcaption>Kavitha, Penang</figcaption>
+        </figure>
+        <figure class="reveal" data-reveal>
+          <div class="stars" role="img" aria-label="5 out of 5 stars">★★★★★</div>
+          <blockquote>I bought the set of three as a gift. My sister has already reordered.</blockquote>
+          <figcaption>Daniel, Johor Bahru</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section style="padding-top:0">
+    <div class="wrap">
+      <div class="news reveal" data-reveal id="news">
+        <div>
+          <h2>New scents, once a month.</h2>
+          <p>Join the list for restocks and small-batch releases. No spam.</p>
+        </div>
+        <form id="newsForm">
+          <label class="sr" for="newsEmail">Email address</label>
+          <input id="newsEmail" type="email" required placeholder="you@example.com" autocomplete="email">
+          <button class="btn" type="submit">Join the list</button>
+        </form>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div>
+      <a class="brand" href="#top">Nice Soap</a>
+      <p class="fine" style="margin-top:.5rem">Handmade in Malaysia. Delivery takes 2 to 4 working days.</p>
+    </div>
+    <nav aria-label="Footer">
+      <a href="#shop">Shop</a>
+      <a href="#story">Our soap</a>
+      <a href="#reviews">Reviews</a>
+    </nav>
+  </div>
+  <div class="wrap"><p class="fine" style="margin-top:1.5rem">© 2026 Nice Soap. All rights reserved.</p></div>
+</footer>
+
+<!-- Quick view -->
+<dialog id="dlgQV" aria-label="Product details"><div id="qvBody"></div></dialog>
+
+<!-- Cart drawer -->
+<dialog id="dlgCart" class="drawer" aria-labelledby="cartTitle">
+  <div class="drawer-head">
+    <h2 id="cartTitle">Your cart</h2>
+    <button class="icon-btn" type="button" data-close aria-label="Close cart">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3l10 10M13 3L3 13"/></svg>
+    </button>
+  </div>
+  <div class="ship" id="shipBox"><p id="shipMsg"></p><div class="track"><div id="shipBar" style="width:0"></div></div></div>
+  <div class="drawer-body" id="cartBody"></div>
+  <div class="drawer-foot" id="cartFoot"></div>
+</dialog>
+
+<!-- Checkout -->
+<dialog id="dlgCheckout" class="small" aria-label="Checkout"><div id="checkoutBody"></div></dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="config.js"></script>
+<script src="script.js" defer></script>
+</body>
+</html>
