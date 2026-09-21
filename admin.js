@@ -2,9 +2,15 @@
   'use strict';
 
   var CFG = window.NICE_SOAP_CONFIG || {};
-  var LIVE = !!(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY);
+  var token = localStorage.getItem('ns_admin_token');
 
-  // Default storefront catalog as fallback reference[cite: 2]
+  // Guard: Redirect to login immediately if no token exists
+  if (!token) {
+    window.location.href = 'login.html';
+    return;
+  }
+
+  // Fallback catalog matching storefront defaults[cite: 2]
   var PRODUCTS = [
     {id:'pandan', name:'Pandan & Coconut Milk', cat:'herbal', price:18, notes:'Fresh pandan, warm coconut, a little vanilla'},
     {id:'serai', name:'Serai Bright', cat:'citrus', price:16, notes:'Lemongrass, lemon peel, a hint of ginger'},
@@ -16,34 +22,6 @@
     {id:'goat', name:'Plain Goat Milk', cat:'unscented', price:21, notes:'Fragrance-free and extra creamy'}
   ];
 
-  // Sample orders for local demo mode[cite: 2, 4, 5]
-  var DEMO_ORDERS = [
-    {
-      order_no: 'NS-849201',
-      customer_name: 'Aina Ahmad',
-      email: 'aina@example.com',
-      phone: '0123456789',
-      address: '12 Jalan Tun Razak',
-      state: 'Kuala Lumpur',
-      total: 54.00,
-      payment_method: 'transfer',
-      status: 'pending',
-      items: [{ product_id: 'pandan', qty: 3, size: 'bar' }]
-    },
-    {
-      order_no: 'NS-593812',
-      customer_name: 'Kavitha Raj',
-      email: 'kavitha@example.com',
-      phone: '0179876543',
-      address: '88 Beach Street',
-      state: 'Penang',
-      total: 48.60,
-      payment_method: 'cod',
-      status: 'processing',
-      items: [{ product_id: 'serai', qty: 1, size: 'set' }]
-    }
-  ];
-
   var allOrders = [];
 
   var $ = function(s){ return document.querySelector(s); };
@@ -51,88 +29,84 @@
 
   var tt;
   function toast(msg){
-    var t = $('#toast'); t.textContent = msg; t.classList.add('show');
-    clearTimeout(tt); tt = setTimeout(function(){ t.classList.remove('show'); }, 2200);
+    var t = $('#toast');
+    if (!t) return;
+    t.textContent = msg; 
+    t.classList.add('show');
+    clearTimeout(tt); 
+    tt = setTimeout(function(){ t.classList.remove('show'); }, 2200);
   }
 
-  /* Fetch orders from Supabase REST API or load Demo Data */
+  /* Fetch live orders using the Authenticated Session Token */
   function loadOrders(){
     var statusEl = $('#dbStatus');
-    if(!LIVE){
-      statusEl.textContent = 'Running in Demo Mode (Simulated Data)';
-      allOrders = DEMO_ORDERS;
-      renderAll();
-      return;
-    }
+    if (statusEl) statusEl.textContent = 'Connecting to Supabase...';
 
-    statusEl.textContent = 'Connecting to Supabase...';
     var url = CFG.SUPABASE_URL.replace(/\/+$/, '') + '/rest/v1/orders?select=*&order=created_at.desc';
 
     fetch(url, {
       headers: {
         'apikey': CFG.SUPABASE_ANON_KEY,
-        'Authorization': 'Bearer ' + CFG.SUPABASE_ANON_KEY
+        'Authorization': 'Bearer ' + token
       }
     })
-    .then(function(res){ return res.json(); })
+    .then(function(res){
+      if (res.status === 401 || res.status === 403) {
+        // Token is invalid or expired
+        localStorage.removeItem('ns_admin_token');
+        localStorage.removeItem('ns_admin_user');
+        window.location.href = 'login.html';
+        return;
+      }
+      return res.json();
+    })
     .then(function(data){
-      if(Array.isArray(data)){
+      if (Array.isArray(data)) {
         allOrders = data;
-        statusEl.textContent = 'Connected to Live Supabase Database';
-      } else {
-        statusEl.textContent = 'Database error: standard query restricted';
-        allOrders = DEMO_ORDERS;
+        if (statusEl) statusEl.textContent = 'Connected to Live Supabase Database';
+        renderAll();
       }
-      renderAll();
     })
-    .catch(function(err){
-      statusEl.textContent = 'Offline / Failed to fetch orders';
-      allOrders = DEMO_ORDERS;
-      renderAll();
+    .catch(function(){
+      if (statusEl) statusEl.textContent = 'Offline / Failed to fetch orders';
     });
   }
 
-  /* Update Order Status */
+  /* Update Order Status with Authenticated Patch Query */
   function updateOrderStatus(orderNo, newStatus){
-    if(!LIVE){
-      var o = allOrders.find(function(item){ return item.order_no === orderNo; });
-      if(o) o.status = newStatus;
-      toast('Updated ' + orderNo + ' to ' + newStatus);
-      renderStats();
-      return;
-    }
-
     var url = CFG.SUPABASE_URL.replace(/\/+$/, '') + '/rest/v1/orders?order_no=eq.' + encodeURIComponent(orderNo);
     fetch(url, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
         'apikey': CFG.SUPABASE_ANON_KEY,
-        'Authorization': 'Bearer ' + CFG.SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + token,
         'Prefer': 'return=minimal'
       },
       body: JSON.stringify({ status: newStatus })
     })
     .then(function(r){
-      if(r.ok){
+      if (r.ok) {
         toast('Status saved for ' + orderNo);
         var o = allOrders.find(function(item){ return item.order_no === orderNo; });
-        if(o) o.status = newStatus;
+        if (o) o.status = newStatus;
         renderStats();
       } else {
         toast('Could not update order status');
       }
     })
-    .catch(function(){ toast('Network error updating status'); });
+    .catch(function(){ 
+      toast('Network error updating status'); 
+    });
   }
 
-  /* Calculations & Stats */
+  /* Calculate and Display Metrics */
   function renderStats(){
     var rev = 0, units = 0;
     allOrders.forEach(function(o){
-      if(o.status !== 'cancelled'){
+      if (o.status !== 'cancelled') {
         rev += Number(o.total || 0);
-        if(Array.isArray(o.items)){
+        if (Array.isArray(o.items)) {
           o.items.forEach(function(i){ units += (i.qty || 1); });
         }
       }
@@ -141,25 +115,31 @@
     var count = allOrders.length;
     var aov = count ? (rev / count) : 0;
 
-    $('#statRevenue').textContent = fmt(rev);
-    $('#statOrders').textContent = count;
-    $('#statUnits').textContent = units;
-    $('#statAOV').textContent = fmt(aov);
+    if ($('#statRevenue')) $('#statRevenue').textContent = fmt(rev);
+    if ($('#statOrders')) $('#statOrders').textContent = count;
+    if ($('#statUnits')) $('#statUnits').textContent = units;
+    if ($('#statAOV')) $('#statAOV').textContent = fmt(aov);
   }
 
-  /* Render Tables */
+  /* Render Customer Orders Table */
   function renderOrders(){
-    var query = ($('#searchOrders').value || '').toLowerCase().trim();
-    var statusFilter = $('#filterStatus').value;
+    var searchEl = $('#searchOrders');
+    var filterEl = $('#filterStatus');
+    var query = (searchEl ? searchEl.value : '').toLowerCase().trim();
+    var statusFilter = filterEl ? filterEl.value : 'all';
 
     var filtered = allOrders.filter(function(o){
-      var matchQ = !query || o.order_no.toLowerCase().includes(query) || (o.customer_name || o.name || '').toLowerCase().includes(query);
+      var matchQ = !query || 
+                   (o.order_no && o.order_no.toLowerCase().includes(query)) || 
+                   (o.customer_name || o.name || '').toLowerCase().includes(query);
       var matchS = statusFilter === 'all' || (o.status || 'pending') === statusFilter;
       return matchQ && matchS;
     });
 
     var tbody = $('#ordersTbody');
-    if(!filtered.length){
+    if (!tbody) return;
+
+    if (!filtered.length) {
       tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:2rem;" class="fine">No matching orders found.</td></tr>';
       return;
     }
@@ -193,8 +173,11 @@
     }).join('');
   }
 
+  /* Render Catalog Overview */
   function renderProducts(){
-    $('#productsTbody').innerHTML = PRODUCTS.map(function(p){
+    var tbody = $('#productsTbody');
+    if (!tbody) return;
+    tbody.innerHTML = PRODUCTS.map(function(p){
       return '<tr>' +
         '<td><strong>' + p.name + '</strong></td>' +
         '<td><span class="fine">' + p.cat + '</span></td>' +
@@ -212,16 +195,28 @@
   }
 
   /* Event Listeners */
-  $('#searchOrders').addEventListener('input', renderOrders);
-  $('#filterStatus').addEventListener('change', renderOrders);
+  var searchInput = $('#searchOrders');
+  var statusFilter = $('#filterStatus');
+  var logoutBtn = $('#logoutBtn');
+
+  if (searchInput) searchInput.addEventListener('input', renderOrders);
+  if (statusFilter) statusFilter.addEventListener('change', renderOrders);
+
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', function(){
+      localStorage.removeItem('ns_admin_token');
+      localStorage.removeItem('ns_admin_user');
+      window.location.href = 'login.html';
+    });
+  }
 
   document.addEventListener('change', function(e){
-    if(e.target.classList.contains('status-select') && e.target.hasAttribute('data-order')){
+    if (e.target.classList.contains('status-select') && e.target.hasAttribute('data-order')) {
       var orderNo = e.target.getAttribute('data-order');
       updateOrderStatus(orderNo, e.target.value);
     }
   });
 
-  // Init
+  // Run on page load
   loadOrders();
 })();
