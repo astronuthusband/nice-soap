@@ -24,6 +24,9 @@ function buildMessage(o) {
   const items = (Array.isArray(o.items) ? o.items : []).slice(0, 15).map(
     (i) => i.qty + ' x ' + i.product_name + (i.size === 'set' ? ' (set of 3)' : ' (bar)')
   );
+  const low = (Array.isArray(o.low_stock) ? o.low_stock : []).slice(0, 10).map(
+    (i) => i.name + (Number(i.left) <= 0 ? ' (sold out)' : ' (' + i.left + ' left)')
+  );
   return [
     'NEW ORDER ' + o.order_no,
     o.customer_name + ', ' + o.phone,
@@ -33,7 +36,8 @@ function buildMessage(o) {
     'Total ' + rm(o.total) + (Number(o.shipping) > 0 ? ' (incl. delivery ' + rm(o.shipping) + ')' : ' (free delivery)'),
     'Payment: ' + (PAYMENT[o.payment_method] || o.payment_method),
     'Deliver to: ' + o.address + ', ' + o.postcode + ' ' + o.state,
-    o.email
+    o.email,
+    ...(low.length ? ['', 'LOW STOCK: ' + low.join(', ')] : [])
   ].join('\n');
 }
 
