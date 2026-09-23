@@ -466,6 +466,7 @@ function prowHTML(p){
     '</div>' +
     '<button type="button" class="btn small" data-edit>Edit</button>' +
     '<button type="button" class="btn small" data-toggle-active>'+(p.active?'Hide':'Show')+'</button>' +
+    '<button type="button" class="btn small danger" data-delete>Delete</button>' +
   '</div>';
 }
 
@@ -475,7 +476,23 @@ $('#productsList').addEventListener('click', function(e){
   var p = products.filter(function(x){ return x.id === id; })[0];
   if(e.target.closest('[data-edit]')) openProductModal(p);
   if(e.target.closest('[data-toggle-active]')) toggleActive(p);
+  if(e.target.closest('[data-delete]')) deleteProduct(p, e.target.closest('[data-delete]'));
 });
+function deleteProduct(p, btn){
+  if(!confirm('Delete "' + p.name + '"? This can\u2019t be undone.\n\nIf it has ever been ordered, deleting is blocked \u2014 hide it instead.')) return;
+  btn.disabled = true; btn.textContent = 'Deleting\u2026';
+  api('/rest/v1/products?id=eq.' + encodeURIComponent(p.id), {method:'DELETE', headers:{'Prefer':'return=minimal'}})
+    .then(function(){
+      products = products.filter(function(x){ return x.id !== p.id; });
+      renderProducts();
+      toast(p.name + ' was deleted');
+    })
+    .catch(function(e){
+      var blocked = /foreign key|violates|referenced/i.test(e.message);
+      toast(blocked ? 'Can\u2019t delete \u2014 it has past orders. Use Hide instead.' : e.message);
+      btn.disabled = false; btn.textContent = 'Delete';
+    });
+}
 $('#productsList').addEventListener('change', function(e){
   var input = e.target.closest('[data-stock]'); if(!input) return;
   var row = e.target.closest('.prow'), id = row.getAttribute('data-id');
