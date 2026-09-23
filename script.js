@@ -40,6 +40,9 @@
       desc:'Just goat milk and gentle oils. It\u2019s our simplest and creamiest bar, made for dry or easily irritated skin.',
       ing:'Olive oil, coconut oil, shea butter, goat milk, sodium hydroxide (fully saponified).'}
   ];
+  // Fallback list (used in demo mode, or if the database can't be reached).
+  var BEST_STATIC = ['pandan','serai','rose','oat','goat','melur'];
+  PRODUCTS.forEach(function(p){ p.stock = 99; p.image = null; p.best = BEST_STATIC.indexOf(p.id) > -1; });
 
   var CATS = [['all','All'],['floral','Floral'],['herbal','Herbal'],['citrus','Citrus'],['unscented','Unscented']];
   var STATES = ['Johor','Kedah','Kelantan','Kuala Lumpur','Labuan','Melaka','Negeri Sembilan','Pahang','Penang','Perak','Perlis','Putrajaya','Sabah','Sarawak','Selangor','Terengganu'];
@@ -71,7 +74,18 @@
       '</svg>';
   }
 
+  function art(p){
+    return p.image
+      ? '<img class="photo" src="'+esc(p.image)+'" alt="" loading="lazy" decoding="async">'
+      : soap(p);
+  }
+
   var $ = function(s){ return document.querySelector(s); };
+  var esc = function(v){
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  };
   var byId = function(id){ return PRODUCTS.filter(function(p){ return p.id === id; })[0]; };
   var fmt = function(n){ return 'RM ' + n.toFixed(2); };
   var priceFor = function(p, size){ return size === 'set' ? Math.round(p.price * 3 * SET_DISCOUNT * 100) / 100 : p.price; };
@@ -84,13 +98,13 @@
     try{
       var raw = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
       if(!Array.isArray(raw)) return [];
-      return raw.filter(function(i){ return i && byId(i.id) && (i.size === 'bar' || i.size === 'set') && i.qty > 0; });
+      return raw.filter(function(i){ return i && typeof i.id === 'string' && (i.size === 'bar' || i.size === 'set') && i.qty > 0; });
     }catch(e){ return []; }
   }
   function save(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(cart)); }catch(e){} }
 
   function totals(){
-    var lines = cart.map(function(i){
+    var lines = cart.filter(function(i){ return byId(i.id); }).map(function(i){
       var p = byId(i.id), price = priceFor(p, i.size);
       return {id:i.id, size:i.size, qty:i.qty, p:p, price:price, key:i.id+'|'+i.size};
     });
@@ -100,19 +114,52 @@
     return {lines:lines, sub:sub, ship:ship, total:sub+ship, items:items};
   }
 
+  /* Stock is counted in single bars. A set of 3 uses 3 bars. */
+  function unitsFor(size, qty){ return (size === 'set' ? 3 : 1) * qty; }
+  function unitsInCart(id){
+    return cart.reduce(function(a, i){ return a + (i.id === id ? unitsFor(i.size, i.qty) : 0); }, 0);
+  }
+  function stockMessage(p, size){
+    if(p.stock <= 0) return 'Sorry, that\u2019s sold out';
+    if(size === 'set' && p.stock - unitsInCart(p.id) > 0) return 'Not enough left for a set of 3';
+    return 'That\u2019s all we have in stock';
+  }
   function addToCart(id, size, qty){
     size = size || 'bar'; qty = qty || 1;
+    var p = byId(id);
+    if(!p) return false;
+    if(p.stock - unitsInCart(id) < unitsFor(size, qty)){ toast(stockMessage(p, size)); return false; }
     var found = cart.filter(function(i){ return i.id === id && i.size === size; })[0];
     if(found) found.qty += qty; else cart.push({id:id, size:size, qty:qty});
     save(); renderCart(); bump();
+    return true;
   }
   function changeQty(key, delta){
     var parts = key.split('|');
     var it = cart.filter(function(i){ return i.id === parts[0] && i.size === parts[1]; })[0];
     if(!it) return;
+    if(delta > 0){
+      var p = byId(it.id);
+      if(!p || p.stock - unitsInCart(it.id) < unitsFor(it.size, delta)){ toast(stockMessage(p || {stock:0}, it.size)); return; }
+    }
     it.qty += delta;
     if(it.qty <= 0) cart = cart.filter(function(i){ return i !== it; });
     save(); renderCart();
+  }
+  /* After the product list loads, drop lines that no longer exist and trim quantities to what is in stock. */
+  function cleanCart(){
+    var changed = false, remaining = {};
+    cart = cart.filter(function(i){ if(byId(i.id)) return true; changed = true; return false; });
+    cart.forEach(function(i){ if(remaining[i.id] == null) remaining[i.id] = byId(i.id).stock; });
+    cart = cart.filter(function(i){
+      var per = unitsFor(i.size, 1), can = Math.floor(remaining[i.id] / per);
+      if(can <= 0){ changed = true; return false; }
+      if(i.qty > can){ i.qty = can; changed = true; }
+      remaining[i.id] -= per * i.qty;
+      return true;
+    });
+    if(changed) save();
+    return changed;
   }
   function removeLine(key){
     var parts = key.split('|');
@@ -148,10 +195,13 @@
     }).join('');
   }
   function tileHTML(p, observed){
-    return '<article class="tile reveal"'+(observed ? ' data-reveal' : '')+' style="--c:'+p.color+'">' +
-      '<button type="button" class="tile-art" data-open="'+p.id+'" aria-label="View details for '+p.name+'">'+soap(p)+'</button>' +
-      '<div class="tile-info"><div><h3>'+p.name+'</h3><p class="notes">'+p.notes+'</p></div><p class="price">'+fmt(p.price)+'</p></div>' +
-      '<button type="button" class="btn" data-add="'+p.id+'" aria-label="Add '+p.name+' to cart">Add to cart</button>' +
+    var out = p.stock <= 0, low = !out && p.stock <= 5;
+    return '<article class="tile reveal'+(out ? ' is-out' : '')+'"'+(observed ? ' data-reveal' : '')+' style="--c:'+esc(p.color)+'">' +
+      '<button type="button" class="tile-art'+(p.image ? ' has-photo' : '')+'" data-open="'+esc(p.id)+'" aria-label="View details for '+esc(p.name)+'">'+art(p)+(out ? '<span class="badge-out">Sold out</span>' : '')+'</button>' +
+      '<div class="tile-info"><div><h3>'+esc(p.name)+'</h3><p class="notes">'+esc(p.notes)+'</p>'+(low ? '<p class="stock-note">Only '+p.stock+' left</p>' : '')+'</div><p class="price">'+fmt(p.price)+'</p></div>' +
+      (out
+        ? '<button type="button" class="btn" disabled>Sold out</button>'
+        : '<button type="button" class="btn" data-add="'+esc(p.id)+'" aria-label="Add '+esc(p.name)+' to cart">Add to cart</button>') +
     '</article>';
   }
   function renderGrid(){
@@ -159,31 +209,43 @@
     var g = $('#grid');
     g.innerHTML = list.length
       ? list.map(function(p){ return tileHTML(p, true); }).join('')
-      : '<p class="empty">No soaps match this filter yet.</p>';
+      : '<p class="empty">'+(PRODUCTS.length ? 'No soaps match this filter yet.' : 'Our soaps are on their way. Please check back soon.')+'</p>';
     observeReveal(g);
   }
-  var BEST = ['pandan','serai','rose','oat','goat','melur'];
+  function bestSellers(){
+    var flagged = PRODUCTS.filter(function(p){ return p.best; });
+    return (flagged.length ? flagged : PRODUCTS).slice(0, 8);
+  }
   function renderCarousel(){
-    $('#bestTrack').innerHTML = BEST.map(function(id){ return tileHTML(byId(id), false); }).join('');
+    var track = $('#bestTrack'), list = bestSellers();
+    $('#best').hidden = list.length === 0;
+    track.innerHTML = list.map(function(p){ return tileHTML(p, false); }).join('');
+    // If the carousel already scrolled into view before the products arrived, show them now.
+    if(track.hasAttribute('data-revealed')){
+      Array.prototype.forEach.call(track.children, function(c, i){ showEl(c, Math.min(i, 4) * STEP); });
+    }
+    if(track.__update) track.__update();
   }
 
   /* ---------- Render: quick view ---------- */
   var qvId = null;
   function openQV(id){
-    var p = byId(id); qvId = id;
+    var p = byId(id); if(!p) return; qvId = id;
+    var out = p.stock <= 0, noSet = p.stock < 3;
     $('#qvBody').innerHTML =
       '<div class="qv">' +
         '<button type="button" class="icon-btn" data-close aria-label="Close">'+X_ICON+'</button>' +
-        '<div class="qv-art" style="--c:'+p.color+'">'+soap(p)+'</div>' +
+        '<div class="qv-art'+(p.image ? ' has-photo' : '')+'" style="--c:'+esc(p.color)+'">'+art(p)+'</div>' +
         '<div class="qv-info">' +
-          '<div><h2>'+p.name+'</h2><p class="notes">'+p.notes+'</p></div>' +
-          '<p>'+p.desc+'</p>' +
-          '<p class="ing"><strong>Ingredients:</strong> '+p.ing+'</p>' +
+          '<div><h2>'+esc(p.name)+'</h2><p class="notes">'+esc(p.notes)+'</p></div>' +
+          '<p>'+esc(p.desc)+'</p>' +
+          (p.ing ? '<p class="ing"><strong>Ingredients:</strong> '+esc(p.ing)+'</p>' : '') +
+          (out ? '<p class="stock-note">Sold out for now</p>' : (p.stock <= 5 ? '<p class="stock-note">Only '+p.stock+' left</p>' : '')) +
           '<fieldset><legend>Choose a size</legend>' +
-            '<label class="opt"><span><input type="radio" name="size" value="bar" checked>Single bar <small>100 g</small></span><span>'+fmt(priceFor(p,'bar'))+'</span></label>' +
-            '<label class="opt"><span><input type="radio" name="size" value="set">Set of 3 <small>save 10%</small></span><span>'+fmt(priceFor(p,'set'))+'</span></label>' +
+            '<label class="opt"><span><input type="radio" name="size" value="bar"'+(out ? ' disabled' : ' checked')+'>Single bar <small>100 g</small></span><span>'+fmt(priceFor(p,'bar'))+'</span></label>' +
+            '<label class="opt"><span><input type="radio" name="size" value="set"'+(noSet ? ' disabled' : '')+'>Set of 3 <small>'+(noSet && !out ? 'not enough left' : 'save 10%')+'</small></span><span>'+fmt(priceFor(p,'set'))+'</span></label>' +
           '</fieldset>' +
-          '<button type="button" class="btn primary block" id="qvAdd">Add to cart</button>' +
+          '<button type="button" class="btn primary block" id="qvAdd"'+(out ? ' disabled' : '')+'>'+(out ? 'Sold out' : 'Add to cart')+'</button>' +
         '</div>' +
       '</div>';
     openDlg($('#dlgQV'));
@@ -192,13 +254,13 @@
   /* ---------- Render: cart ---------- */
   function lineHTML(l, editable){
     var side = editable
-      ? '<div class="line-side"><p>'+fmt(l.price*l.qty)+'</p><button type="button" class="link" data-rm="'+l.key+'" aria-label="Remove '+l.p.name+' from cart">Remove</button></div>'
+      ? '<div class="line-side"><p>'+fmt(l.price*l.qty)+'</p><button type="button" class="link" data-rm="'+esc(l.key)+'" aria-label="Remove '+esc(l.p.name)+' from cart">Remove</button></div>'
       : '<div class="line-side"><p>'+fmt(l.price*l.qty)+'</p></div>';
     var qty = editable
-      ? '<div class="qty"><button type="button" data-dec="'+l.key+'" aria-label="Decrease quantity of '+l.p.name+'">\u2212</button><span aria-live="polite">'+l.qty+'</span><button type="button" data-inc="'+l.key+'" aria-label="Increase quantity of '+l.p.name+'">+</button></div>'
+      ? '<div class="qty"><button type="button" data-dec="'+l.key+'" aria-label="Decrease quantity of '+esc(l.p.name)+'">\u2212</button><span aria-live="polite">'+l.qty+'</span><button type="button" data-inc="'+l.key+'" aria-label="Increase quantity of '+esc(l.p.name)+'">+</button></div>'
       : '';
-    return '<li class="line"><div class="thumb" style="--c:'+l.p.color+'">'+soap(l.p)+'</div>' +
-      '<div><p class="line-name">'+l.p.name+'</p><p class="line-meta">'+sizeLabel(l.size)+(editable?'':' \u00d7 '+l.qty)+'</p>'+qty+'</div>'+side+'</li>';
+    return '<li class="line"><div class="thumb'+(l.p.image ? ' has-photo' : '')+'" style="--c:'+esc(l.p.color)+'">'+art(l.p)+'</div>' +
+      '<div><p class="line-name">'+esc(l.p.name)+'</p><p class="line-meta">'+sizeLabel(l.size)+(editable?'':' \u00d7 '+l.qty)+'</p>'+qty+'</div>'+side+'</li>';
   }
 
   function renderCart(){
@@ -323,7 +385,7 @@
     var ctrl = new AbortController();
     var timer = setTimeout(function(){ ctrl.abort(); }, 15000);
 
-    fetch(CFG.SUPABASE_URL.replace(/\/+$/, '') + '/rest/v1/rpc/place_order', {
+    fetch(CFG.SUPABASE_URL.replace(/\/+$/, '').replace(/\/rest\/v1$/, '') + '/rest/v1/rpc/place_order', {
       method: 'POST',
       headers: {'Content-Type':'application/json', 'apikey':CFG.SUPABASE_ANON_KEY, 'Authorization':'Bearer ' + CFG.SUPABASE_ANON_KEY},
       body: JSON.stringify({payload: payload}),
@@ -339,6 +401,15 @@
     }, function(e){
       clearTimeout(timer);
       var known = e && e.body && e.body.code === 'P0001' && e.body.message;
+      if(known && /in stock|no longer available/.test(e.body.message)){
+        refreshProducts().then(function(){
+          $('#dlgCheckout').close();
+          renderCart();
+          openDlg($('#dlgCart'));
+          toast(e.body.message + ' Your cart has been updated.');
+        });
+        return;
+      }
       err.textContent = known ? e.body.message : 'We couldn\u2019t place your order. Please check your connection and try again.';
       err.hidden = false;
       btn.disabled = false; btn.textContent = label;
@@ -350,12 +421,13 @@
     var t = e.target, el;
     if((el = t.closest('[data-cat]'))){ filter = el.getAttribute('data-cat'); renderChips(); renderGrid(); return; }
     if((el = t.closest('[data-open]'))){ openQV(el.getAttribute('data-open')); return; }
-    if((el = t.closest('[data-add]'))){ addToCart(el.getAttribute('data-add'), 'bar', 1); toast('Added to cart'); return; }
+    if((el = t.closest('[data-add]'))){ if(addToCart(el.getAttribute('data-add'), 'bar', 1)) toast('Added to cart'); return; }
     if(t.closest('#qvAdd')){
       var size = (document.querySelector('#qvBody input[name="size"]:checked') || {}).value || 'bar';
-      addToCart(qvId, size, 1);
-      $('#dlgQV').close();
-      toast('Added to cart');
+      if(addToCart(qvId, size, 1)){
+        $('#dlgQV').close();
+        toast('Added to cart');
+      }
       return;
     }
     if((el = t.closest('[data-inc]'))){ changeQty(el.getAttribute('data-inc'), 1); return; }
@@ -426,6 +498,7 @@
     vis.forEach(function(el){
       revealIO.unobserve(el);
       if(el.hasAttribute('data-reveal-group')){
+        el.setAttribute('data-revealed', '1');
         Array.prototype.forEach.call(el.children, function(c, i){ showEl(c, Math.min(i, 4) * STEP); });
       } else {
         showEl(el, Math.min(n, 5) * STEP);
@@ -484,6 +557,7 @@
       raf = requestAnimationFrame(function(){ raf = 0; update(); });
     }, {passive:true});
     window.addEventListener('resize', update, {passive:true});
+    track.__update = update;
     update();
   }
 
@@ -521,13 +595,51 @@
     window.addEventListener('resize', apply, {passive:true});
   }
 
+  /* ---------- Products from the database ---------- */
+  function apiBase(){ return CFG.SUPABASE_URL.replace(/\/+$/, '').replace(/\/rest\/v1$/, ''); }
+  function normalize(r){
+    return {
+      id: r.id, name: r.name, cat: r.category, price: Number(r.price_myr),
+      color: /^#[0-9a-f]{6}$/i.test(r.color || '') ? r.color : '#E6E1D3',
+      motif: ICONS[r.motif] ? r.motif : 'dots',
+      tone: r.tone === 'light' ? 'light' : 'dark',
+      notes: r.notes || '', desc: r.description || '', ing: r.ingredients || '',
+      image: /^https:\/\//.test(r.image_url || '') ? r.image_url : null,
+      stock: Math.max(0, Number(r.stock) || 0), best: !!r.best_seller
+    };
+  }
+  // Resolves with the list from the database, or null if it can't be reached (the built-in list is used instead).
+  function fetchProducts(){
+    if(!LIVE) return Promise.resolve(null);
+    var ctrl = new AbortController();
+    var timer = setTimeout(function(){ ctrl.abort(); }, 6000);
+    return fetch(apiBase() + '/rest/v1/products?select=*&active=eq.true&order=sort_order.asc,created_at.asc', {
+      headers: {'apikey':CFG.SUPABASE_ANON_KEY, 'Authorization':'Bearer ' + CFG.SUPABASE_ANON_KEY},
+      signal: ctrl.signal
+    }).then(function(r){
+      clearTimeout(timer);
+      if(!r.ok) throw new Error('products');
+      return r.json();
+    }).then(function(rows){
+      return Array.isArray(rows) ? rows.map(normalize) : null;
+    }).catch(function(){ clearTimeout(timer); return null; });
+  }
+  function applyProducts(list, announce){
+    if(list) PRODUCTS = list;
+    var changed = cleanCart();
+    renderGrid(); renderCarousel(); renderCart();
+    $('#grid').removeAttribute('aria-busy');
+    if(changed && announce) toast('Your cart was updated to match what\u2019s in stock');
+  }
+  function refreshProducts(){ return fetchProducts().then(function(list){ applyProducts(list, false); }); }
+
   /* Init */
+  $('#grid').setAttribute('aria-busy', 'true');
   renderChips();
-  renderGrid();
-  renderCarousel();
   renderCart();
   setupReveal();
   setupCarousel();
   setupSticky();
   setupParallax();
+  fetchProducts().then(function(list){ applyProducts(list, true); });
 })();
